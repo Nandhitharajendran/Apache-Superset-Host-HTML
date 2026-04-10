@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OEE Command Center</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #060910;
+    --bg2: #0b0f1e;
+    --bg3: #0f1428;
+    --border: rgba(255,255,255,0.06);
+    --border2: rgba(255,255,255,0.12);
+    --cyan: #00e5ff;
+    --green: #00ff88;
+    --purple: #7f77dd;
+    --amber: #ef9f27;
+    --red: #ff4455;
+    --text: #e0eaff;
+    --muted: #4a6080;
+    --sidebar-w: 220px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); min-height: 100vh; display: flex; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+    transition: width 0.3s ease;
+  }
+  .sidebar-logo {
+    padding: 20px 18px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo-top { display: flex; align-items: center; gap: 9px; }
+  .logo-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, #00e5ff22, #7f77dd22);
+    border: 1px solid var(--cyan);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon span { width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); display: block; box-shadow: 0 0 8px var(--cyan); }
+  .logo-name { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.1em; color: #fff; }
+  .logo-sub { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; margin-top: 3px; }
+
+  .nav-section-label {
+    padding: 18px 18px 6px;
+    font-size: 9px; font-weight: 600; letter-spacing: 0.16em;
+    color: var(--muted); text-transform: uppercase;
+  }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 18px;
+    cursor: pointer;
+    border-radius: 0;
+    transition: all 0.18s;
+    position: relative;
+    margin: 1px 0;
+    color: #4a6080;
+    font-size: 13px; font-weight: 500;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+  }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-item.active {
+    color: var(--cyan);
+    background: rgba(0,229,255,0.06);
+    border-left-color: var(--cyan);
+  }
+  .nav-icon { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.7; }
+  .nav-item.active .nav-icon { opacity: 1; }
+  .nav-badge {
+    margin-left: auto; font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 20px;
+    background: rgba(255,68,85,0.15); color: var(--red);
+    border: 1px solid rgba(255,68,85,0.3);
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+  }
+  .shift-info {
+    background: rgba(0,229,255,0.05);
+    border: 1px solid rgba(0,229,255,0.12);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .shift-label { font-size: 9px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .shift-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--cyan); margin-top: 2px; }
+  .live-dot {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; color: var(--green); margin-top: 6px;
+  }
+  .live-dot::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green); display: inline-block;
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .page-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; color: #fff; }
+  .page-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .tbtn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: #8aa0bc; font-size: 11px; font-weight: 500;
+    padding: 6px 14px; border-radius: 8px; cursor: pointer;
+    transition: all 0.18s; font-family: 'Inter', sans-serif;
+    letter-spacing: 0.04em;
+  }
+  .tbtn:hover { background: rgba(0,229,255,0.08); border-color: rgba(0,229,255,0.3); color: var(--cyan); }
+  .tbtn-primary { background: rgba(0,229,255,0.1); border-color: rgba(0,229,255,0.3); color: var(--cyan); }
+
+  /* ── DASHBOARD PAGES ── */
+  .page { display: none; padding: 20px 24px 32px; }
+  .page.active { display: block; }
+
+  /* ── CARDS ── */
+  .grid { display: grid; gap: 16px; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g2 { grid-template-columns: 1.1fr 1.9fr; }
+  .g2e { grid-template-columns: 1fr 1fr; }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  }
+  .card:hover { border-color: var(--border2); transform: translateY(-1px); box-shadow: 0 8px 28px rgba(0,0,0,0.4); }
+  .card-accent { position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: 16px 16px 0 0; }
+
+  .ch { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .ct {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: #fff;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .cdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .cmenu { color: rgba(255,255,255,0.2); font-size: 18px; cursor: pointer; }
+
+  /* KPI numbers */
+  .kpi { font-family: 'Syne', sans-serif; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .kpi-xl { font-size: 60px; }
+  .kpi-lg { font-size: 42px; }
+  .kpi-md { font-size: 28px; }
+  .kpi-cyan { color: var(--cyan); }
+  .kpi-green { color: var(--green); }
+  .kpi-amber { color: var(--amber); }
+  .kpi-red { color: var(--red); }
+  .kpi-purple { color: var(--purple); }
+  .klabel { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 8px; }
+
+  /* Pills */
+  .pill { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 20px; letter-spacing: 0.06em; }
+  .pill-g { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.25); }
+  .pill-r { background: rgba(255,68,85,0.1); color: var(--red); border: 1px solid rgba(255,68,85,0.25); }
+  .pill-y { background: rgba(239,159,39,0.1); color: var(--amber); border: 1px solid rgba(239,159,39,0.25); }
+  .pill-c { background: rgba(0,229,255,0.1); color: var(--cyan); border: 1px solid rgba(0,229,255,0.25); }
+
+  /* Status badges */
+  .sbadge { display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.07em; }
+  .s-ok { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+  .s-delay { background: rgba(239,159,39,0.08); color: var(--amber); border: 1px solid rgba(239,159,39,0.2); }
+  .s-stop { background: rgba(255,68,85,0.08); color: var(--red); border: 1px solid rgba(255,68,85,0.2); }
+  .s-crit { background: rgba(255,68,85,0.08); color: var(--red); border: 1px solid rgba(255,68,85,0.2); }
+
+  /* Chart wrappers */
+  .cw { width: 100%; position: relative; }
+  .cw-sm { height: 120px; }
+  .cw-md { height: 150px; }
+  .cw-lg { height: 200px; }
+
+  /* Legend */
+  .legrow { display: flex; gap: 14px; margin-bottom: 10px; }
+  .leg { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: 0.05em; }
+  .legline { width: 14px; height: 2.5px; border-radius: 2px; }
+
+  /* Divider */
+  .div { width: 100%; height: 1px; background: var(--border); margin: 14px 0; }
+
+  /* Sub stats row */
+  .substats { display: flex; gap: 20px; }
+  .substat-label { color: var(--muted); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+  .substat-val { font-size: 16px; font-weight: 700; margin-top: 3px; }
+
+  /* Table */
+  .tbl { width: 100%; border-collapse: collapse; }
+  .tbl thead th { color: var(--cyan); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .tbl tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
+  .tbl tbody tr:hover { background: rgba(255,255,255,0.03); }
+  .tbl tbody td { font-size: 12px; padding: 9px 10px; font-weight: 500; color: #c0d4e8; }
+
+  /* Mini bar */
+  .mbar-wrap { width: 70px; height: 4px; background: rgba(255,255,255,0.07); border-radius: 2px; display: inline-block; vertical-align: middle; margin-left: 6px; }
+  .mbar { height: 100%; border-radius: 2px; }
+
+  /* Section gap */
+  .gap { margin-top: 16px; }
+
+  /* Gauge visual */
+  .gauge-wrap { position: relative; width: 100%; height: 70px; display: flex; align-items: flex-end; justify-content: center; }
+
+  /* Stat rows for energy */
+  .erow { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .erow:last-child { border-bottom: none; }
+  .erow-label { font-size: 12px; color: var(--muted); }
+  .erow-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: var(--text); }
+
+  /* Downtime log table row */
+  .dtlog-row td:first-child { font-family: 'IBM Plex Mono', monospace; font-size: 10px; }
+
+  /* Alert pulse */
+  .alert-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 52px; color: var(--amber); }
+
+  /* Rejection gauge arc */
+  .gauge-arc-wrap { display: flex; justify-content: center; margin: 10px 0; }
+
+  /* Scroll margin for smooth feel */
+  .page { animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Mono font for numbers in tables */
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-top">
+      <div class="logo-icon"><span></span></div>
+      <div>
+        <div class="logo-name">OEE CENTER</div>
+      </div>
+    </div>
+    <div class="logo-sub">Manufacturing Intelligence</div>
+  </div>
+
+  <div class="nav-section-label">Dashboards</div>
+
+  <a class="nav-item active" onclick="showPage('oee')">
+    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="10" cy="10" r="7"/><path d="M10 10l3.5-3.5M7 10h.5"/>
+    </svg>
+    OEE Overview
+  </a>
+  <a class="nav-item" onclick="showPage('downtime')">
+    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="3" y="3" width="14" height="14" rx="2"/>
+      <path d="M10 7v4M10 13h.01"/>
+    </svg>
+    Downtime
+    <span class="nav-badge">4</span>
+  </a>
+  <a class="nav-item" onclick="showPage('quality')">
+    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M9 12l2 2 4-4M5 10a5 5 0 1010 0 5 5 0 00-10 0"/>
+    </svg>
+    Quality
+  </a>
+  <a class="nav-item" onclick="showPage('energy')">
+    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M13 3L7 11h5l-1 6 6-8h-5l1-6z"/>
+    </svg>
+    Energy
+  </a>
+
+  <div class="nav-section-label">Reports</div>
+  <a class="nav-item" onclick="alert('Connect to your reporting module')">
+    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M6 2h8l4 4v12a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z"/><path d="M14 2v4h4"/>
+    </svg>
+    Export PDF
+  </a>
+  <a class="nav-item" onclick="alert('Connect to your settings')">
+    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="10" cy="10" r="2"/><path d="M10 2v2m0 12v2M2 10h2m12 0h2M4.93 4.93l1.41 1.41m7.07 7.07l1.41 1.41M4.93 15.07l1.41-1.41m7.07-7.07l1.41-1.41"/>
+    </svg>
+    Settings
+  </a>
+
+  <div class="sidebar-footer">
+    <div class="shift-info">
+      <div class="shift-label">Active Shift</div>
+      <div class="shift-val">Shift A — 07 Apr 2026</div>
+      <div class="live-dot">LIVE</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <div class="page-title" id="page-title">OEE Overview</div>
+      <div class="page-sub" id="page-sub">Real-time equipment effectiveness · Shift A</div>
+    </div>
+    <div class="topbar-right">
+      <button class="tbtn">⟳ Refresh</button>
+      <button class="tbtn tbtn-primary">Edit Dashboard</button>
+      <button class="tbtn">···</button>
+    </div>
+  </div>
+
+  <!-- ═══════ PAGE 1: OEE OVERVIEW ═══════ -->
+  <div class="page active" id="page-oee">
+    <div class="grid g3">
+
+      <!-- OEE Gauge -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#00bcd4)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></div>OEE % Gauge</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="kpi kpi-xl kpi-cyan">61.31</div>
+        <div class="klabel">Overall Equipment Effectiveness</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <span class="pill pill-y">BELOW TARGET</span>
+          <span style="color:var(--muted);font-size:10px">Target: 75%</span>
+        </div>
+        <div class="div"></div>
+        <div class="substats">
+          <div><div class="substat-label">Avail</div><div class="substat-val" style="color:var(--green)">82%</div></div>
+          <div><div class="substat-label">Perf</div><div class="substat-val" style="color:var(--cyan)">75%</div></div>
+          <div><div class="substat-label">Quality</div><div class="substat-val" style="color:var(--purple)">99%</div></div>
+        </div>
+      </div>
+
+      <!-- Availability Trend -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00ff88,#1d9e75)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--green);box-shadow:0 0 6px var(--green)"></div>Availability Trend</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="legrow"><div class="leg"><div class="legline" style="background:#00c97a"></div>AVG Availability</div></div>
+        <div class="cw cw-sm"><canvas id="av"></canvas></div>
+      </div>
+
+      <!-- Performance Trend -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#7f77dd,#534ab7)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--purple);box-shadow:0 0 6px var(--purple)"></div>Performance Trend</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="legrow"><div class="leg"><div class="legline" style="background:var(--purple)"></div>AVG Performance</div></div>
+        <div class="cw cw-sm"><canvas id="pf"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid g2 gap">
+      <!-- Production vs Plan -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ef9f27,#ba7517)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--amber);box-shadow:0 0 6px var(--amber)"></div>Production vs Plan</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="legrow">
+          <div class="leg"><div class="legline" style="background:var(--cyan)"></div>Plan Qty</div>
+          <div class="leg"><div class="legline" style="background:var(--green)"></div>Actual Qty</div>
+        </div>
+        <div class="cw cw-md"><canvas id="pr"></canvas></div>
+      </div>
+
+      <!-- Machine Status Table -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#7f77dd)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></div>Machine Status Table</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>Line Name</th><th>Status</th><th>Actual Qty</th><th>Progress</th></tr></thead>
+          <tbody id="oee-tbl"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ PAGE 2: MACHINE DOWNTIME ═══════ -->
+  <div class="page" id="page-downtime">
+    <div class="grid g4">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ff4455,#c02030)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--red)"></div>Total Downtime</div></div>
+        <div class="kpi kpi-lg kpi-red">2.9M</div>
+        <div class="klabel">Minutes — All Machines</div>
+        <div style="margin-top:8px"><span class="pill pill-r">+12% vs last shift</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ef9f27,#ba7517)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--amber)"></div>Avg Downtime</div></div>
+        <div class="kpi kpi-lg kpi-amber">322K</div>
+        <div class="klabel">Minutes per Machine</div>
+        <div style="margin-top:8px"><span class="pill pill-y">9 machines tracked</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#00bcd4)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--cyan)"></div>Active Stops</div></div>
+        <div class="kpi kpi-lg kpi-cyan">4</div>
+        <div class="klabel">Currently Stopped / Delayed</div>
+        <div style="margin-top:8px"><span class="pill pill-r">2 STOPPED · 2 DELAY</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00ff88,#1d9e75)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--green)"></div>Shifts Logged</div></div>
+        <div class="kpi kpi-lg kpi-green">200</div>
+        <div class="klabel">Total Shift Entries</div>
+        <div style="margin-top:8px"><span class="pill pill-g">A · B · C Shifts</span></div>
+      </div>
+    </div>
+
+    <div class="grid g2e gap">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#7f77dd,#534ab7)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--purple)"></div>Downtime Distribution</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="cw" style="height:190px"><canvas id="dt-pie"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ef9f27,#ba7517)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--amber)"></div>Downtime by Machine</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="cw" style="height:190px"><canvas id="dt-bar"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid gap" style="grid-template-columns:1fr">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#7f77dd)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--cyan)"></div>Downtime Log</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="color:var(--muted);font-size:10px">Show 200 entries</span>
+            <span class="cmenu">⋮</span>
+          </div>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>Shift Date</th><th>Shift</th><th>Code</th><th>Machine</th><th>Issue</th><th>Duration (min)</th><th>Prod. Impact</th></tr></thead>
+          <tbody id="dt-log"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid gap" style="grid-template-columns:1fr">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00ff88,#1d9e75)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--green)"></div>Downtime Trend</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="cw cw-lg"><canvas id="dt-trend"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ PAGE 3: QUALITY ═══════ -->
+  <div class="page" id="page-quality">
+    <div class="grid g4">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ff4455,#c02030)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--red)"></div>Rejection Rate</div></div>
+        <div class="kpi kpi-md kpi-red">2.75%</div>
+        <div class="klabel">Avg Rejection Rate</div>
+        <div style="margin-top:8px"><span class="pill pill-r">ABOVE THRESHOLD</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ef9f27,#ba7517)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--amber)"></div>Critical Shifts</div></div>
+        <div class="kpi kpi-md kpi-amber">48</div>
+        <div class="klabel">Shifts Flagged Critical</div>
+        <div style="margin-top:8px"><span class="pill pill-y">Rejection rate ≥ 4.99</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#00bcd4)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--cyan)"></div>Defect Units</div></div>
+        <div class="kpi kpi-md kpi-cyan">150</div>
+        <div class="klabel">Peak Defects / Shift</div>
+        <div style="margin-top:8px"><span class="pill pill-c">SUM tracked</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00ff88,#1d9e75)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--green)"></div>Quality Score</div></div>
+        <div class="kpi kpi-md kpi-green">99%</div>
+        <div class="klabel">OEE Quality Factor</div>
+        <div style="margin-top:8px"><span class="pill pill-g">WITHIN TARGET</span></div>
+      </div>
+    </div>
+
+    <div class="grid g2e gap">
+      <!-- Critical Shifts Table -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ff4455,#c02030)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--red)"></div>Critical Shifts Table</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>Shift Date</th><th>Rejection Rate</th><th>Status</th><th>AVG Rate</th></tr></thead>
+          <tbody id="q-critical"></tbody>
+        </table>
+      </div>
+
+      <!-- Rejection Rate Gauge -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ef9f27,#ba7517)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--amber)"></div>Rejection Rate Gauge</div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="cw" style="height:180px"><canvas id="q-gauge"></canvas></div>
+        <div style="text-align:center;margin-top:8px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;color:var(--amber)">2.75</div>
+          <div class="klabel">Current Rejection Rate</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid gap" style="grid-template-columns:1fr">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#7f77dd)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--cyan)"></div>Top Defects Over Time</div>
+          <div class="legrow" style="margin:0">
+            <div class="leg"><div class="legline" style="background:var(--cyan)"></div>Defect Units</div>
+            <div class="leg"><div class="legline" style="background:var(--green)"></div>Major Defects</div>
+          </div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="cw cw-lg"><canvas id="q-defects"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ PAGE 4: ENERGY ═══════ -->
+  <div class="page" id="page-energy">
+    <div class="grid g4">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#00bcd4)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--cyan)"></div>Energy per Unit</div></div>
+        <div class="kpi kpi-lg kpi-cyan">2.99</div>
+        <div class="klabel">Energy Per Unit (kWh)</div>
+        <div style="margin-top:8px"><span class="pill pill-y">Above baseline 2.50</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ff4455,#c02030)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--red)"></div>Alert Count</div></div>
+        <div class="kpi kpi-lg kpi-red">11.6k</div>
+        <div class="klabel">Total Energy Alerts</div>
+        <div style="margin-top:8px"><span class="pill pill-r">High anomaly rate</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00ff88,#1d9e75)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--green)"></div>Baseline Target</div></div>
+        <div class="kpi kpi-lg kpi-green">2.50</div>
+        <div class="klabel">Target Energy / Unit</div>
+        <div style="margin-top:8px"><span class="pill pill-g">+0.49 current gap</span></div>
+      </div>
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#7f77dd,#534ab7)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--purple)"></div">Avg Consumption</div></div>
+        <div class="kpi kpi-lg kpi-purple">1.2k</div>
+        <div class="klabel">Peak kWh per Period</div>
+        <div style="margin-top:8px"><span class="pill" style="background:rgba(127,119,221,0.1);color:var(--purple);border:1px solid rgba(127,119,221,0.25)">2005–2025</span></div>
+      </div>
+    </div>
+
+    <div class="grid gap" style="grid-template-columns:1fr">
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ff4455,#ef9f27)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--red)"></div>Consumption Over Time</div>
+          <div class="legrow" style="margin:0">
+            <div class="leg"><div class="legline" style="background:var(--red)"></div>AVG Total Consumption</div>
+          </div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="cw cw-lg"><canvas id="en-trend"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid g2e gap">
+      <!-- Baseline vs Actual bar -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#ef9f27,#ba7517)"></div>
+        <div class="ch">
+          <div class="ct"><div class="cdot" style="background:var(--amber)"></div>Baseline vs Actual</div>
+          <div class="legrow" style="margin:0">
+            <div class="leg"><div class="legline" style="background:var(--red)"></div>Baseline</div>
+            <div class="leg"><div class="legline" style="background:var(--purple)"></div>Actual</div>
+          </div>
+          <span class="cmenu">⋮</span>
+        </div>
+        <div class="cw cw-md"><canvas id="en-baseline"></canvas></div>
+      </div>
+
+      <!-- Energy Summary Stats -->
+      <div class="card">
+        <div class="card-accent" style="background:linear-gradient(90deg,#00e5ff,#00bcd4)"></div>
+        <div class="ch"><div class="ct"><div class="cdot" style="background:var(--cyan)"></div>Energy Summary</div></div>
+        <div class="erow"><div class="erow-label">Total Consumption (2005–2025)</div><div class="erow-val">24.8M kWh</div></div>
+        <div class="erow"><div class="erow-label">Average per Shift</div><div class="erow-val">3,412 kWh</div></div>
+        <div class="erow"><div class="erow-label">Baseline Target (total)</div><div class="erow-val">20.7M kWh</div></div>
+        <div class="erow"><div class="erow-label">Over-consumption</div><div class="erow-val" style="color:var(--red)">+4.1M kWh</div></div>
+        <div class="erow"><div class="erow-label">Peak Period</div><div class="erow-val">2021–2023</div></div>
+        <div class="erow"><div class="erow-label">Alert Threshold</div><div class="erow-val">1,400 kWh</div></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Chart.js global defaults ──
+Chart.defaults.color = '#4a6080';
+Chart.defaults.font.family = "'Inter', sans-serif";
+Chart.defaults.font.size = 10;
+
+const cfg = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: '#141b2d',
+      titleColor: '#7ecfff',
+      bodyColor: '#d0e4f4',
+      borderColor: 'rgba(255,255,255,0.1)',
+      borderWidth: 1,
+      cornerRadius: 8,
+      padding: 10
+    }
+  },
+  scales: {
+    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5570', maxTicksLimit: 7 } },
+    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#3d5570', maxTicksLimit: 5 } }
+  }
+};
+
+function mkLine(labels, data, color) {
+  return {
+    type: 'line',
+    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '18', fill: true, borderWidth: 1.5, pointRadius: 0, tension: 0.4 }] },
+    options: { ...cfg }
+  };
+}
+
+// ── OEE Charts ──
+const yrs = ['05','07','09','11','13','15','17','19','21','23','25'];
+new Chart(document.getElementById('av'), mkLine(yrs, [82,78,85,88,80,84,86,83,87,85,88], '#00c97a'));
+new Chart(document.getElementById('pf'), mkLine(yrs, [70,74,72,78,75,73,76,79,74,77,75], '#7f77dd'));
+
+const lines = ['L1','L2','L3','L4','L5','L6','L7','L8'];
+new Chart(document.getElementById('pr'), {
+  type: 'bar',
+  data: { labels: lines, datasets: [
+    { label: 'Plan', data: [2200,2000,2400,1800,2100,1900,2300,2200], backgroundColor: '#00e5ff30', borderColor: '#00e5ff', borderWidth: 1, borderRadius: 4 },
+    { label: 'Actual', data: [1800,2100,2000,1600,2300,1500,2100,1950], backgroundColor: '#00ff8830', borderColor: '#00ff88', borderWidth: 1, borderRadius: 4 }
+  ]},
+  options: { ...cfg }
+});
+
+// OEE Table
+const oeeRows = [
+  {name:'Line-6',status:'DELAY',qty:320,plan:500},
+  {name:'Line-9',status:'OK',qty:215,plan:300},
+  {name:'Line-10',status:'STOPPED',qty:304,plan:450},
+  {name:'Line-5',status:'OK',qty:393,plan:400},
+  {name:'Line-2',status:'OK',qty:510,plan:500},
+  {name:'Line-7',status:'DELAY',qty:180,plan:350}
+];
+const oeeTbl = document.getElementById('oee-tbl');
+oeeRows.forEach(r => {
+  const cls = r.status === 'OK' ? 's-ok' : r.status === 'DELAY' ? 's-delay' : 's-stop';
+  const pct = Math.min(Math.round(r.qty/r.plan*100), 100);
+  const bc = r.status === 'OK' ? '#00ff88' : r.status === 'DELAY' ? '#ef9f27' : '#ff4455';
+  oeeTbl.innerHTML += `<tr>
+    <td><strong>${r.name}</strong></td>
+    <td><span class="sbadge ${cls}">${r.status}</span></td>
+    <td class="mono" style="color:#e0eaff">${r.qty}</td>
+    <td><span style="color:var(--muted);font-size:10px">${pct}%</span>
+      <span class="mbar-wrap"><span class="mbar" style="width:${pct}%;background:${bc}"></span></span></td>
+  </tr>`;
+});
+
+// ── Downtime Charts ──
+const machines = ['Machine-1','Machine-2','Machine-3','Machine-4','Machine-5','Machine-6','Machine-7','Machine-8','Machine-9','Machine-10'];
+const dtData = [290000, 305000, 285000, 312000, 295000, 278000, 301000, 315000, 270000, 288000];
+
+new Chart(document.getElementById('dt-pie'), {
+  type: 'doughnut',
+  data: {
+    labels: machines,
+    datasets: [{ data: dtData, backgroundColor: ['#00e5ff40','#7f77dd40','#00ff8840','#ef9f2740','#ff445540','#00bcd440','#534ab740','#1d9e7540','#ba751740','#c0203040'], borderColor: ['#00e5ff','#7f77dd','#00ff88','#ef9f27','#ff4455','#00bcd4','#534ab7','#1d9e75','#ba7517','#c02030'], borderWidth: 1 }]
+  },
+  options: { ...cfg, cutout: '55%', plugins: { legend: { display: true, position: 'right', labels: { color: '#4a6080', font: { size: 9 }, boxWidth: 10, padding: 6 } } } }
+});
+
+new Chart(document.getElementById('dt-bar'), {
+  type: 'bar',
+  data: { labels: machines.map(m => m.replace('Machine-','')), datasets: [{ label: 'Downtime (min)', data: dtData, backgroundColor: '#3b5a8040', borderColor: '#4a7aaa', borderWidth: 1, borderRadius: 4 }] },
+  options: { ...cfg }
+});
+
+// Downtime Log
+const dtLog = [
+  {date:'2005-01-01',shift:'A Shift',code:'A',machine:'Machine-1',issue:'Program agreement when instead turn.',dur:86,impact:92},
+  {date:'2005-01-01',shift:'A Shift',code:'A',machine:'Machine-2',issue:'House view perhaps debate them red since.',dur:22,impact:88},
+  {date:'2005-01-01',shift:'A Shift',code:'A',machine:'Machine-4',issue:'Enter image begin picture run training tell beyond.',dur:74,impact:76},
+  {date:'2005-01-01',shift:'B Shift',code:'B',machine:'Machine-8',issue:'Responsibility green between character also son.',dur:109,impact:90},
+  {date:'2005-01-01',shift:'C Shift',code:'C',machine:'Machine-6',issue:'Need politics team.',dur:33,impact:88},
+  {date:'2005-01-02',shift:'A Shift',code:'A',machine:'Machine-1',issue:'Action not what public member.',dur:93,impact:44},
+  {date:'2005-01-02',shift:'B Shift',code:'B',machine:'Machine-4',issue:'Himself hospital condition effort direction door environment.',dur:119,impact:93}
+];
+const dtLogEl = document.getElementById('dt-log');
+dtLog.forEach(r => {
+  const durColor = r.dur > 90 ? 'var(--red)' : r.dur > 60 ? 'var(--amber)' : 'var(--text)';
+  dtLogEl.innerHTML += `<tr class="dtlog-row">
+    <td>${r.date}</td><td>${r.shift}</td><td>${r.code}</td>
+    <td><strong>${r.machine}</strong></td>
+    <td style="color:var(--muted);max-width:200px">${r.issue}</td>
+    <td class="mono" style="color:${durColor}">${r.dur}</td>
+    <td class="mono" style="color:var(--green)">${r.impact}</td>
+  </tr>`;
+});
+
+// Downtime Trend
+const trendPts = Array.from({length: 40}, (_,i) => Math.floor(150 + Math.random()*180));
+new Chart(document.getElementById('dt-trend'), {
+  type: 'bar',
+  data: { labels: trendPts.map((_,i)=>i+1), datasets: [{ data: trendPts, backgroundColor: '#3b5a8060', borderColor: '#4a7aaa', borderWidth: 0, borderRadius: 2 }] },
+  options: { ...cfg }
+});
+
+// ── Quality Charts ──
+const qCritical = [
+  {date:'2025-11-16',rate:4.99993,avg:5},
+  {date:'2025-07-18',rate:4.99974,avg:5},
+  {date:'2010-05-14',rate:4.99948,avg:5},
+  {date:'2009-04-03',rate:4.99913,avg:5},
+  {date:'2020-11-21',rate:4.99924,avg:5},
+  {date:'2020-05-12',rate:4.99879,avg:5},
+  {date:'2018-07-29',rate:4.99852,avg:5},
+];
+const qCritEl = document.getElementById('q-critical');
+qCritical.forEach(r => {
+  qCritEl.innerHTML += `<tr>
+    <td class="mono">${r.date}</td>
+    <td class="mono" style="color:var(--red)">${r.rate.toFixed(5)}</td>
+    <td><span class="sbadge s-crit">CRITICAL</span></td>
+    <td class="mono">${r.avg}</td>
+  </tr>`;
+});
+
+new Chart(document.getElementById('q-gauge'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Rejection Rate', 'Remaining'],
+    datasets: [{ data: [2.75, 5.49 - 2.75], backgroundColor: ['#ef9f27', 'rgba(255,255,255,0.05)'], borderColor: ['#ef9f27', 'transparent'], borderWidth: 2 }]
+  },
+  options: { ...cfg, cutout: '70%', rotation: -90, circumference: 180 }
+});
+
+const defectPts = Array.from({length: 50}, () => Math.floor(20 + Math.random() * 110));
+const majorPts = defectPts.map(v => Math.floor(v * 0.1));
+const defectLabels = Array.from({length: 50}, (_,i) => 2000 + Math.floor(i/2));
+new Chart(document.getElementById('q-defects'), {
+  type: 'bar',
+  data: { labels: defectLabels, datasets: [
+    { label: 'Defect Units', data: defectPts, backgroundColor: '#00e5ff40', borderColor: '#00e5ff', borderWidth: 0, borderRadius: 2 },
+    { label: 'Major Defects', data: majorPts, backgroundColor: '#00ff8840', borderColor: '#00ff88', borderWidth: 0, borderRadius: 2 }
+  ]},
+  options: { ...cfg }
+});
+
+// ── Energy Charts ──
+const enYears = Array.from({length: 40}, (_,i) => 2005 + Math.floor(i/2));
+const enVals = enYears.map(() => Math.floor(600 + Math.random()*700));
+new Chart(document.getElementById('en-trend'), {
+  type: 'line',
+  data: { labels: enYears, datasets: [{ data: enVals, borderColor: '#ff4455', backgroundColor: '#ff445518', fill: true, borderWidth: 1, pointRadius: 0, tension: 0.2 }] },
+  options: { ...cfg }
+});
+
+const enBars = Array.from({length: 15}, (_,i) => i+1);
+new Chart(document.getElementById('en-baseline'), {
+  type: 'bar',
+  data: { labels: enBars, datasets: [
+    { label: 'Baseline', data: enBars.map(() => Math.floor(2000 + Math.random()*500000)), backgroundColor: '#ff445530', borderColor: '#ff4455', borderWidth: 1, borderRadius: 3 },
+    { label: 'Actual', data: enBars.map(() => Math.floor(500 + Math.random()*80000)), backgroundColor: '#7f77dd30', borderColor: '#7f77dd', borderWidth: 1, borderRadius: 3 }
+  ]},
+  options: { ...cfg }
+});
+
+// ── Navigation ──
+const pages = { oee: 'page-oee', downtime: 'page-downtime', quality: 'page-quality', energy: 'page-energy' };
+const titles = {
+  oee: ['OEE Overview', 'Real-time equipment effectiveness · Shift A'],
+  downtime: ['Machine Downtime', 'Downtime logs, distribution & trend analysis'],
+  quality: ['Quality Dashboard', 'Rejection rates, defects & critical shift analysis'],
+  energy: ['Energy Dashboard', 'Consumption over time, baseline vs actual']
+};
+
+function showPage(key) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + key).classList.add('active');
+  document.querySelectorAll('.nav-item')[Object.keys(pages).indexOf(key)].classList.add('active');
+  document.getElementById('page-title').textContent = titles[key][0];
+  document.getElementById('page-sub').textContent = titles[key][1];
+}
+</script>
+</body>
+</html>
